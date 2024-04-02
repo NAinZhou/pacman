@@ -2056,7 +2056,7 @@
         },
       });
 
-      //NPC
+      //NPC------------------------------------------------------------------------------
       for (var i = 0; i < 4; i++) {
         stage.createItem({
           width: 30,
@@ -2071,93 +2071,65 @@
           speed: 1,
           timeout: Math.floor(Math.random() * 120),
           update: function () {
-            var new_map;
             if (this.status == 3 && !this.timeout) {
               this.status = 1;
             }
             if (!this.coord.offset) {
-              //到达坐标中心时计算
-              if (this.status == 1) {
-                if (!this.timeout) {
-                  //定时器
-                  new_map = JSON.parse(
-                    JSON.stringify(map.data).replace(/2/g, 0)
-                  );
-                  var id = this._id;
-                  items.forEach(function (item) {
-                    if (item._id != id && item.status == 1) {
-                      //NPC将其它所有还处于正常状态的NPC当成一堵墙
-                      new_map[item.coord.y][item.coord.x] = 1;
-                    }
-                  });
-                  this.path = map.finder({
-                    map: new_map,
-                    start: this.coord,
-                    end: player.coord,
-                  });
-                  //this.path = AStarSearch(new_map, this.coord, player.coord);
-
-                  if (this.path.length) {
-                    this.vector = this.path[0];
-                  }
+              var new_map = JSON.parse(
+                JSON.stringify(map.data).replace(/2/g, 0)
+              );
+              var id = this._id;
+              items.forEach(function (item) {
+                if (item._id != id && item.status == 1) {
+                  // 将其他 NPC 视为障碍
+                  new_map[item.coord.y][item.coord.x] = 1;
                 }
-              } else if (this.status == 3) {
-                new_map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
-                var id = this._id;
-                items.forEach(function (item) {
-                  if (item._id != id) {
-                    new_map[item.coord.y][item.coord.x] = 1;
-                  }
-                });
-                this.path = map.finder({
-                  map: new_map,
-                  start: player.coord,
-                  end: this.coord,
-                  type: "next",
-                });
-                //this.path = AStarSearch(new_map, this.coord, player.coord);
+              });
 
-                if (this.path.length) {
-                  this.vector =
-                    this.path[Math.floor(Math.random() * this.path.length)];
-                }
-              } else if (this.status == 4) {
-                new_map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
-                this.path = map.finder({
-                  map: new_map,
-                  start: this.coord,
-                  end: this._params.coord,
-                });
-                // this.path = AStarSearch(new_map, this.coord, player.coord);
+              // 输出地图数据以确认其结构
+              console.log("Modified map for pathfinding:", new_map);
 
-                if (this.path.length) {
-                  this.vector = this.path[0];
-                } else {
-                  this.status = 1;
-                }
+              // 四舍五入玩家坐标到最近的整数
+              var roundedPlayerCoord = {
+                x: Math.round(player.coord.x),
+                y: Math.round(player.coord.y),
+              };
+
+              // 使用 A* 算法查找路径
+              this.path = map.finder({
+                map: new_map,
+                start: this.coord,
+                end: roundedPlayerCoord,
+              });
+
+              // 输出路径长度来检查是否找到了路径
+              console.log("NPC Path length:", this.path.length);
+
+              // 验证 NPC 和玩家的坐标
+              console.log("NPC coordinates:", this.coord);
+              console.log("Player coordinates:", player.coord);
+
+              if (this.path.length) {
+                this.vector = this.path[0]; // 设置下一个目标点
               }
-              //是否转变方向
-              if (this.vector.change) {
-                this.coord.x = this.vector.x;
-                this.coord.y = this.vector.y;
-                var pos = map.coord2position(this.coord.x, this.coord.y);
-                this.x = pos.x;
-                this.y = pos.y;
-              }
-              //方向判定
-              if (this.vector.x > this.coord.x) {
-                this.orientation = 0;
-              } else if (this.vector.x < this.coord.x) {
-                this.orientation = 2;
-              } else if (this.vector.y > this.coord.y) {
-                this.orientation = 1;
-              } else if (this.vector.y < this.coord.y) {
-                this.orientation = 3;
+              // 根据新路径更新 NPC 的方向和位置
+              if (this.vector) {
+                if (this.vector.x > this.coord.x) {
+                  this.orientation = 0;
+                } else if (this.vector.x < this.coord.x) {
+                  this.orientation = 2;
+                } else if (this.vector.y > this.coord.y) {
+                  this.orientation = 1;
+                } else if (this.vector.y < this.coord.y) {
+                  this.orientation = 3;
+                }
+                // 根据方向移动 NPC
+                this.x += this.speed * _COS[this.orientation];
+                this.y += this.speed * _SIN[this.orientation];
               }
             }
-            this.x += this.speed * _COS[this.orientation];
-            this.y += this.speed * _SIN[this.orientation];
           },
+
           draw: function (context) {
             var isSick = false;
             if (this.status == 3) {
