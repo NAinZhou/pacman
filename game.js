@@ -163,7 +163,7 @@ function Game(id, params) {
       offset: Math.sqrt(fx * fx + fy * fy),
     };
   };
-  //AStar------------------------------------------------------------------------------------------------------------------
+  //寻址算法
   Map.prototype.finder = function (params) {
     var defaults = {
       map: null,
@@ -172,85 +172,6 @@ function Game(id, params) {
       type: "path",
     };
     var options = Object.assign({}, defaults, params);
-
-    function AStarSearch(map, start, end) {
-      var openList = [],
-        closedList = [],
-        path = [];
-      var startNode = {
-        x: start.x,
-        y: start.y,
-        g: 0,
-        h: getHeuristic(start, end),
-        f: 0,
-        parent: null,
-      };
-      startNode.f = startNode.g + startNode.h;
-      openList.push(startNode);
-
-      while (openList.length > 0) {
-        var lowIndex = 0;
-        for (var i = 0; i < openList.length; i++) {
-          if (openList[i].f < openList[lowIndex].f) {
-            lowIndex = i;
-          }
-        }
-        var currentNode = openList.splice(lowIndex, 1)[0];
-        if (currentNode.x == end.x && currentNode.y == end.y) {
-          var curr = currentNode;
-          while (curr.parent) {
-            path.push({ x: curr.x, y: curr.y });
-            curr = curr.parent;
-          }
-          return path.reverse();
-        }
-        closedList.push(currentNode);
-        var neighbors = getNeighbors(map, currentNode);
-
-        for (var i = 0; i < neighbors.length; i++) {
-          var neighbor = neighbors[i];
-          if (closedList.find((c) => c.x == neighbor.x && c.y == neighbor.y)) {
-            continue;
-          }
-          var gScore = currentNode.g + 1;
-          var gScoreIsBest = false;
-
-          if (!openList.find((c) => c.x == neighbor.x && c.y == neighbor.y)) {
-            gScoreIsBest = true;
-            neighbor.h = getHeuristic(neighbor, end);
-            openList.push(neighbor);
-          } else if (gScore < neighbor.g) {
-            gScoreIsBest = true;
-          }
-
-          if (gScoreIsBest) {
-            neighbor.parent = currentNode;
-            neighbor.g = gScore;
-            neighbor.f = neighbor.g + neighbor.h;
-          }
-        }
-      }
-
-      return path;
-
-      function getNeighbors(map, node) {
-        var ret = [];
-        var x = node.x,
-          y = node.y;
-        if (map[y - 1] && map[y - 1][x] == 0) ret.push({ x: x, y: y - 1 });
-        if (map[y + 1] && map[y + 1][x] == 0) ret.push({ x: x, y: y + 1 });
-        if (map[y][x - 1] && map[y][x - 1] == 0) ret.push({ x: x - 1, y: y });
-        if (map[y][x + 1] && map[y][x + 1] == 0) ret.push({ x: x + 1, y: y });
-        return ret;
-      }
-
-      function getHeuristic(pos0, pos1) {
-        var d1 = Math.abs(pos1.x - pos0.x);
-        var d2 = Math.abs(pos1.y - pos0.y);
-        return d1 + d2;
-      }
-    }
-
     if (
       options.map[options.start.y][options.start.x] ||
       options.map[options.end.y][options.end.x]
@@ -258,18 +179,82 @@ function Game(id, params) {
       //当起点或终点设置在墙上
       return [];
     }
-
-    // 直接使用AStarSearch算法查找路径
-    var path = AStarSearch(options.map, options.start, options.end);
-
-    // 根据寻址类型处理结果
-    if (options.type === "next" && path.length > 1) {
-      // 如果是查找下一步，则返回路径的第二个节点（第一个节点是起点）
-      return [path[1]];
+    var finded = false;
+    var result = [];
+    var y_length = options.map.length;
+    var x_length = options.map[0].length;
+    var steps = Array(y_length)
+      .fill(0)
+      .map(() => Array(x_length).fill(0)); //步骤的映射
+    var _getValue = function (x, y) {
+      //获取地图上的值
+      if (options.map[y] && typeof options.map[y][x] != "undefined") {
+        return options.map[y][x];
+      }
+      return -1;
+    };
+    var _next = function (to) {
+      //判定是否可走,可走放入列表
+      var value = _getValue(to.x, to.y);
+      if (value < 1) {
+        if (value == -1) {
+          to.x = (to.x + x_length) % x_length;
+          to.y = (to.y + y_length) % y_length;
+          to.change = 1;
+        }
+        if (!steps[to.y][to.x]) {
+          result.push(to);
+        }
+      }
+    };
+    var _render = function (list) {
+      //找线路
+      var new_list = [];
+      var next = function (from, to) {
+        var value = _getValue(to.x, to.y);
+        if (value < 1) {
+          //当前点是否可以走
+          if (value == -1) {
+            to.x = (to.x + x_length) % x_length;
+            to.y = (to.y + y_length) % y_length;
+            to.change = 1;
+          }
+          if (to.x == options.end.x && to.y == options.end.y) {
+            steps[to.y][to.x] = from;
+            finded = true;
+          } else if (!steps[to.y][to.x]) {
+            steps[to.y][to.x] = from;
+            new_list.push(to);
+          }
+        }
+      };
+      list.forEach(function (current) {
+        next(current, { y: current.y + 1, x: current.x });
+        next(current, { y: current.y, x: current.x + 1 });
+        next(current, { y: current.y - 1, x: current.x });
+        next(current, { y: current.y, x: current.x - 1 });
+      });
+      if (!finded && new_list.length) {
+        _render(new_list);
+      }
+    };
+    _render([options.start]);
+    if (finded) {
+      var current = options.end;
+      if (options.type == "path") {
+        while (current.x != options.start.x || current.y != options.start.y) {
+          result.unshift(current);
+          current = steps[current.y][current.x];
+        }
+      } else if (options.type == "next") {
+        _next({ x: current.x + 1, y: current.y });
+        _next({ x: current.x, y: current.y + 1 });
+        _next({ x: current.x - 1, y: current.y });
+        _next({ x: current.x, y: current.y - 1 });
+      }
     }
-    return path;
+    return result;
   };
-
   //布景对象构造器
   var Stage = function (params) {
     this._params = params || {};
