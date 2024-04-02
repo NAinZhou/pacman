@@ -164,6 +164,34 @@ function Game(id, params) {
     };
   };
   //寻址算法
+  function PriorityQueue() {
+    this.collection = [];
+    this.enqueue = function (element) {
+      if (this.isEmpty()) {
+        this.collection.push(element);
+      } else {
+        let added = false;
+        for (let i = 0; i < this.collection.length; i++) {
+          if (element[1] < this.collection[i][1]) {
+            this.collection.splice(i, 0, element);
+            added = true;
+            break;
+          }
+        }
+        if (!added) {
+          this.collection.push(element);
+        }
+      }
+    };
+    this.dequeue = function () {
+      let value = this.collection.shift();
+      return value[0];
+    };
+    this.isEmpty = function () {
+      return this.collection.length === 0;
+    };
+  }
+
   Map.prototype.finder = function (params) {
     var defaults = {
       map: null,
@@ -176,85 +204,81 @@ function Game(id, params) {
       options.map[options.start.y][options.start.x] ||
       options.map[options.end.y][options.end.x]
     ) {
-      //当起点或终点设置在墙上
+      // 当起点或终点设置在墙上
       return [];
     }
-    var finded = false;
-    var result = [];
-    var y_length = options.map.length;
-    var x_length = options.map[0].length;
-    var steps = Array(y_length)
+    var openList = new PriorityQueue();
+    var closedList = new Set();
+    var gScores = Array(options.map.length)
       .fill(0)
-      .map(() => Array(x_length).fill(0)); //步骤的映射
-    var _getValue = function (x, y) {
-      //获取地图上的值
-      if (options.map[y] && typeof options.map[y][x] != "undefined") {
-        return options.map[y][x];
+      .map(() => Array(options.map[0].length).fill(Infinity));
+    var fScores = Array(options.map.length)
+      .fill(0)
+      .map(() => Array(options.map[0].length).fill(Infinity));
+    var cameFrom = {};
+
+    var startKey = `${options.start.x},${options.start.y}`;
+    gScores[options.start.y][options.start.x] = 0;
+    fScores[options.start.y][options.start.x] = heuristic(
+      options.start,
+      options.end
+    );
+    openList.enqueue([startKey, fScores[options.start.y][options.start.x]]);
+
+    function heuristic(current, goal) {
+      // 使用曼哈顿距离作为启发式函数
+      return Math.abs(current.x - goal.x) + Math.abs(current.y - goal.y);
+    }
+
+    function reconstructPath(cameFrom, current) {
+      var totalPath = [current];
+      while (Object.keys(cameFrom).includes(`${current.x},${current.y}`)) {
+        current = cameFrom[`${current.x},${current.y}`];
+        totalPath.unshift(current);
       }
-      return -1;
-    };
-    var _next = function (to) {
-      //判定是否可走,可走放入列表
-      var value = _getValue(to.x, to.y);
-      if (value < 1) {
-        if (value == -1) {
-          to.x = (to.x + x_length) % x_length;
-          to.y = (to.y + y_length) % y_length;
-          to.change = 1;
-        }
-        if (!steps[to.y][to.x]) {
-          result.push(to);
-        }
+      return totalPath;
+    }
+
+    while (!openList.isEmpty()) {
+      var current = openList.dequeue();
+      var [currentX, currentY] = current.split(",").map(Number);
+      if (currentX === options.end.x && currentY === options.end.y) {
+        return reconstructPath(cameFrom, options.end);
       }
-    };
-    var _render = function (list) {
-      //找线路
-      var new_list = [];
-      var next = function (from, to) {
-        var value = _getValue(to.x, to.y);
-        if (value < 1) {
-          //当前点是否可以走
-          if (value == -1) {
-            to.x = (to.x + x_length) % x_length;
-            to.y = (to.y + y_length) % y_length;
-            to.change = 1;
-          }
-          if (to.x == options.end.x && to.y == options.end.y) {
-            steps[to.y][to.x] = from;
-            finded = true;
-          } else if (!steps[to.y][to.x]) {
-            steps[to.y][to.x] = from;
-            new_list.push(to);
-          }
+      closedList.add(current);
+      var neighbors = [
+        { x: currentX + 1, y: currentY },
+        { x: currentX, y: currentY + 1 },
+        { x: currentX - 1, y: currentY },
+        { x: currentX, y: currentY - 1 },
+      ];
+
+      for (var i = 0; i < neighbors.length; i++) {
+        var neighbor = neighbors[i];
+        var neighborKey = `${neighbor.x},${neighbor.y}`;
+        if (closedList.has(neighborKey)) continue;
+        if (!this._isWalkable(neighbor.x, neighbor.y, options.map)) continue;
+
+        var tentativeGScore = gScores[currentY][currentX] + 1; // assuming cost from current to neighbor is 1
+        if (tentativeGScore >= gScores[neighbor.y][neighbor.x]) continue;
+
+        cameFrom[neighborKey] = { x: currentX, y: currentY };
+        gScores[neighbor.y][neighbor.x] = tentativeGScore;
+        fScores[neighbor.y][neighbor.x] =
+          gScores[neighbor.y][neighbor.x] + heuristic(neighbor, options.end);
+        if (!openList.collection.some((item) => item[0] === neighborKey)) {
+          openList.enqueue([neighborKey, fScores[neighbor.y][neighbor.x]]);
         }
-      };
-      list.forEach(function (current) {
-        next(current, { y: current.y + 1, x: current.x });
-        next(current, { y: current.y, x: current.x + 1 });
-        next(current, { y: current.y - 1, x: current.x });
-        next(current, { y: current.y, x: current.x - 1 });
-      });
-      if (!finded && new_list.length) {
-        _render(new_list);
-      }
-    };
-    _render([options.start]);
-    if (finded) {
-      var current = options.end;
-      if (options.type == "path") {
-        while (current.x != options.start.x || current.y != options.start.y) {
-          result.unshift(current);
-          current = steps[current.y][current.x];
-        }
-      } else if (options.type == "next") {
-        _next({ x: current.x + 1, y: current.y });
-        _next({ x: current.x, y: current.y + 1 });
-        _next({ x: current.x - 1, y: current.y });
-        _next({ x: current.x, y: current.y - 1 });
       }
     }
-    return result;
+
+    return []; // return an empty path if there is no path found
   };
+
+  Map.prototype._isWalkable = function (x, y, map) {
+    return map[y] && typeof map[y][x] !== "undefined" && map[y][x] === 0;
+  };
+
   //布景对象构造器
   var Stage = function (params) {
     this._params = params || {};

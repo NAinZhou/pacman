@@ -2070,46 +2070,50 @@
           speed: 1,
           timeout: Math.floor(Math.random() * 120),
           update: function () {
-            var new_map;
             if (this.status == 3 && !this.timeout) {
               this.status = 1;
             }
             if (!this.coord.offset) {
-              //到达坐标中心时计算
+              // 到达坐标中心时计算
               if (this.status == 1) {
                 if (!this.timeout) {
-                  //定时器
+                  // 定时器
                   new_map = JSON.parse(
-                    JSON.stringify(map.data).replace(/2/g, 0)
+                    JSON.stringify(map.data).replace(/2/g, "0")
                   );
                   var id = this._id;
                   items.forEach(function (item) {
                     if (item._id != id && item.status == 1) {
-                      //NPC将其它所有还处于正常状态的NPC当成一堵墙
+                      // NPC将其它所有还处于正常状态的NPC当成一堵墙
                       new_map[item.coord.y][item.coord.x] = 1;
                     }
                   });
+                  // 使用A*算法寻找到玩家的路径
                   this.path = map.finder({
                     map: new_map,
                     start: this.coord,
                     end: player.coord,
                   });
                   if (this.path.length) {
-                    this.vector = this.path[0];
+                    this.vector = this.path[0]; // 设置下一个移动目标为路径的第一个点
                   }
                 }
               } else if (this.status == 3) {
-                new_map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
+                // 其它状态处理，类似上面的逻辑
+                new_map = JSON.parse(
+                  JSON.stringify(map.data).replace(/2/g, "0")
+                );
                 var id = this._id;
                 items.forEach(function (item) {
                   if (item._id != id) {
                     new_map[item.coord.y][item.coord.x] = 1;
                   }
                 });
+                // 逃避玩家逻辑，可能需要修改，例如使用A*算法寻找到某个安全点的路径
                 this.path = map.finder({
                   map: new_map,
-                  start: player.coord,
-                  end: this.coord,
+                  start: this.coord,
+                  end: player.coord, // 此处应修改为逃避策略的目标坐标
                   type: "next",
                 });
                 if (this.path.length) {
@@ -2117,16 +2121,18 @@
                     this.path[Math.floor(Math.random() * this.path.length)];
                 }
               } else if (this.status == 4) {
-                new_map = JSON.parse(JSON.stringify(map.data).replace(/2/g, 0));
+                new_map = JSON.parse(
+                  JSON.stringify(map.data).replace(/2/g, "0")
+                );
                 this.path = map.finder({
                   map: new_map,
                   start: this.coord,
-                  end: this._params.coord,
+                  end: this._params.coord, // 特定任务的目标坐标
                 });
                 if (this.path.length) {
                   this.vector = this.path[0];
                 } else {
-                  this.status = 1;
+                  this.status = 1; // 无法找到路径时回到正常状态
                 }
               }
               //是否转变方向
